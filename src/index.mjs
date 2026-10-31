@@ -1,6 +1,3 @@
-
-#!/usr/bin/env node
-
 // Coletor ASLAN
 // --once: consulta todas as integrantes uma única vez.
 // --pending: atende somente solicitações pendentes.
