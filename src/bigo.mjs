@@ -6,12 +6,12 @@ const UA =
 
 /**
  * Gera a URL do perfil da Bigo.
- * Diagnóstico temporário: aceita IDs alfanuméricos de 1 a 50 caracteres.
+ * Aceita letras, números, pontos e underline.
  */
 export function urlFor(template, id) {
   const normalizedId = String(id ?? '').trim()
 
-  if (!/^[A-Za-z0-9]{1,50}$/.test(normalizedId)) {
+  if (!/^[A-Za-z0-9_.]{1,50}$/.test(normalizedId)) {
     throw new Error(
       `id inválido: "${normalizedId}" (original: "${id}")`
     )
@@ -78,7 +78,7 @@ export async function fetchFast(url, timeoutMs = 8000) {
 }
 
 /**
- * Abre navegador reutilizável.
+ * Abre um navegador reutilizável.
  * Bloqueia imagens, fontes, mídia e CSS para economizar recursos.
  */
 export async function openBrowser() {
@@ -155,6 +155,7 @@ export async function fetchRendered(ctx, url, timeoutMs = 15000) {
       timeout: timeoutMs,
     })
 
+    // Aguarda o valor deixar de ser um possível placeholder.
     await page
       .waitForFunction(
         () =>
