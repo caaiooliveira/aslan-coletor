@@ -1,8 +1,4 @@
 
-// Busca os dados de um ID da Bigo.
-// Caminho rápido: HTTP simples.
-// Caminho completo: navegador Playwright, quando a página precisa ser renderizada.
-
 import { parseBigo } from './parse.mjs'
 
 const UA =
@@ -10,13 +6,19 @@ const UA =
 
 /**
  * Gera a URL do perfil da Bigo.
- * Aceita IDs numéricos e alfanuméricos.
+ * Diagnóstico temporário: aceita IDs alfanuméricos de 1 a 50 caracteres.
  */
 export function urlFor(template, id) {
   const normalizedId = String(id ?? '').trim()
 
-  if (!/^[A-Za-z0-9]{3,50}$/.test(normalizedId)) {
-    throw new Error(`id inválido: ${normalizedId}`)
+  if (!/^[A-Za-z0-9]{1,50}$/.test(normalizedId)) {
+    throw new Error(
+      `id inválido: "${normalizedId}" (original: "${id}")`
+    )
+  }
+
+  if (!template || !template.includes('{id}')) {
+    throw new Error('BIGO_URL_TEMPLATE inválido ou sem {id}')
   }
 
   return template.replace(
@@ -26,7 +28,7 @@ export function urlFor(template, id) {
 }
 
 /**
- * Tenta obter os dados diretamente pelo HTML.
+ * Consulta rápida via HTTP.
  */
 export async function fetchFast(url, timeoutMs = 8000) {
   const ctl = new AbortController()
@@ -76,8 +78,8 @@ export async function fetchFast(url, timeoutMs = 8000) {
 }
 
 /**
- * Abre um navegador reutilizável.
- * Bloqueia imagens, fontes, mídia e CSS para reduzir o consumo.
+ * Abre navegador reutilizável.
+ * Bloqueia imagens, fontes, mídia e CSS para economizar recursos.
  */
 export async function openBrowser() {
   const { chromium } = await import('playwright')
@@ -130,7 +132,7 @@ export async function openBrowser() {
 }
 
 /**
- * Consulta os dados com a página renderizada pelo navegador.
+ * Consulta usando a página renderizada pelo navegador.
  */
 export async function fetchRendered(ctx, url, timeoutMs = 15000) {
   const page = await ctx.context.newPage()
@@ -153,7 +155,6 @@ export async function fetchRendered(ctx, url, timeoutMs = 15000) {
       timeout: timeoutMs,
     })
 
-    // Aguarda o valor deixar de ser um possível placeholder.
     await page
       .waitForFunction(
         () =>
