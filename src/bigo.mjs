@@ -1,24 +1,33 @@
 
-// Busca os dois valores de um ID Bigo.
+// Busca os dados de um ID da Bigo.
 // Caminho rápido: HTTP simples.
-// Caminho completo: navegador headless.
+// Caminho completo: navegador Playwright, quando a página precisa ser renderizada.
 
 import { parseBigo } from './parse.mjs'
 
 const UA =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
 
-// Aceita IDs numéricos e alfanuméricos.
+/**
+ * Gera a URL do perfil da Bigo.
+ * Aceita IDs numéricos e alfanuméricos.
+ */
 export function urlFor(template, id) {
   const normalizedId = String(id ?? '').trim()
 
-  if (!/^[a-zA-Z0-9_-]{3,50}$/.test(normalizedId)) {
-    throw new Error(`ID Bigo inválido: ${normalizedId}`)
+  if (!/^[A-Za-z0-9]{3,50}$/.test(normalizedId)) {
+    throw new Error(`id inválido: ${normalizedId}`)
   }
 
-  return template.replace('{id}', encodeURIComponent(normalizedId))
+  return template.replace(
+    '{id}',
+    encodeURIComponent(normalizedId)
+  )
 }
 
+/**
+ * Tenta obter os dados diretamente pelo HTML.
+ */
 export async function fetchFast(url, timeoutMs = 8000) {
   const ctl = new AbortController()
   const timer = setTimeout(() => ctl.abort(), timeoutMs)
@@ -27,16 +36,16 @@ export async function fetchFast(url, timeoutMs = 8000) {
     const res = await fetch(url, {
       headers: {
         'user-agent': UA,
-        'accept-language': 'pt-BR,pt;q=0.9'
+        'accept-language': 'pt-BR,pt;q=0.9',
       },
       signal: ctl.signal,
-      redirect: 'follow'
+      redirect: 'follow',
     })
 
     if (!res.ok) {
       return {
         ok: false,
-        error: `HTTP ${res.status}`
+        error: `HTTP ${res.status}`,
       }
     }
 
@@ -47,29 +56,28 @@ export async function fetchFast(url, timeoutMs = 8000) {
           ok: true,
           beans: p.beans,
           viewNums: p.viewNums,
-          roomStatus: p.roomStatus
+          roomStatus: p.roomStatus,
         }
       : {
           ok: false,
-          error: p.beansReason
+          error: p.beansReason,
         }
-
   } catch (e) {
     return {
       ok: false,
-      error: e?.name === 'AbortError'
-        ? 'timeout'
-        : String(e?.message ?? e).slice(0, 120)
+      error:
+        e?.name === 'AbortError'
+          ? 'timeout'
+          : String(e?.message ?? e).slice(0, 120),
     }
-
   } finally {
     clearTimeout(timer)
   }
 }
 
 /**
- * Abre navegador reutilizável.
- * Bloqueia imagens, fontes, mídia e CSS.
+ * Abre um navegador reutilizável.
+ * Bloqueia imagens, fontes, mídia e CSS para reduzir o consumo.
  */
 export async function openBrowser() {
   const { chromium } = await import('playwright')
@@ -84,8 +92,8 @@ export async function openBrowser() {
       '--disable-component-update',
       '--disable-sync',
       '--no-first-run',
-      '--proxy-bypass-list=<-loopback>'
-    ]
+      '--proxy-bypass-list=<-loopback>',
+    ],
   })
 
   const context = await browser.newContext({
@@ -93,36 +101,36 @@ export async function openBrowser() {
     locale: 'pt-BR',
     viewport: {
       width: 1000,
-      height: 800
-    }
+      height: 800,
+    },
   })
 
   await context.route('**/*', (route) => {
     const type = route.request().resourceType()
 
-    return [
-      'image',
-      'font',
-      'media',
-      'stylesheet'
-    ].includes(type)
-      ? route.abort()
-      : route.continue()
+    if (
+      ['image', 'font', 'media', 'stylesheet'].includes(type)
+    ) {
+      return route.abort()
+    }
+
+    return route.continue()
   })
 
   return {
     browser,
     context,
+
     close: () =>
       Promise.race([
         browser.close(),
-        new Promise(resolve => setTimeout(resolve, 8000))
-      ]).catch(() => {})
+        new Promise((resolve) => setTimeout(resolve, 8000)),
+      ]).catch(() => {}),
   }
 }
 
 /**
- * Consulta a página renderizada pela Bigo.
+ * Consulta os dados com a página renderizada pelo navegador.
  */
 export async function fetchRendered(ctx, url, timeoutMs = 15000) {
   const page = await ctx.context.newPage()
@@ -130,29 +138,32 @@ export async function fetchRendered(ctx, url, timeoutMs = 15000) {
   try {
     const resp = await page.goto(url, {
       waitUntil: 'domcontentloaded',
-      timeout: timeoutMs
+      timeout: timeoutMs,
     })
 
     if (resp && resp.status() >= 400) {
       return {
         ok: false,
         error: `HTTP ${resp.status()}`,
-        final: true
+        final: true,
       }
     }
 
     await page.waitForSelector('.info-bean', {
-      timeout: timeoutMs
+      timeout: timeoutMs,
     })
 
-    await page.waitForFunction(
-      () =>
-        /\d/.test(
-          document.querySelector('.info-bean')?.textContent ?? ''
-        ),
-      null,
-      { timeout: 4000 }
-    ).catch(() => {})
+    // Aguarda o valor deixar de ser um possível placeholder.
+    await page
+      .waitForFunction(
+        () =>
+          /\d/.test(
+            document.querySelector('.info-bean')?.textContent ?? ''
+          ),
+        null,
+        { timeout: 4000 }
+      )
+      .catch(() => {})
 
     const p = parseBigo(await page.content())
 
@@ -161,21 +172,21 @@ export async function fetchRendered(ctx, url, timeoutMs = 15000) {
           ok: true,
           beans: p.beans,
           viewNums: p.viewNums,
-          roomStatus: p.roomStatus
+          roomStatus: p.roomStatus,
         }
       : {
           ok: false,
-          error: p.beansReason
+          error: p.beansReason,
         }
-
   } catch (e) {
     return {
       ok: false,
       error: /Timeout/i.test(String(e?.message))
         ? 'timeout (info-bean não apareceu)'
-        : String(e?.message ?? e).split('\n')[0].slice(0, 120)
+        : String(e?.message ?? e)
+            .split('\n')[0]
+            .slice(0, 120),
     }
-
   } finally {
     await page.close().catch(() => {})
   }
