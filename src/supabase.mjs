@@ -5,6 +5,7 @@ export function makeApi(baseUrl, serviceKey) {
       method: 'POST',
       headers: { apikey: serviceKey, authorization: `Bearer ${serviceKey}`, 'content-type': 'application/json' },
       body: JSON.stringify(body ?? {}),
+      signal: AbortSignal.timeout(20_000),   // nunca ficar pendurado esperando o Supabase
     })
     if (!res.ok) throw new Error(`${fn}: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`)
     return res.json()

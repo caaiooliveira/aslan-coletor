@@ -31,7 +31,7 @@ export async function openBrowser() {
     const t = route.request().resourceType()
     return ['image', 'font', 'media', 'stylesheet'].includes(t) ? route.abort() : route.continue()
   })
-  return { browser, context, close: () => browser.close() }
+  return { browser, context, close: () => Promise.race([browser.close(), new Promise((r) => setTimeout(r, 8000))]).catch(() => {}) }
 }
 
 export async function fetchRendered(ctx, url, timeoutMs = 15000) {

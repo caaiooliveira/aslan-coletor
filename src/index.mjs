@@ -106,13 +106,14 @@ async function main() {
   if (mode === '--window') {
     const secs = Math.min(Math.max(Number(process.argv[3] ?? '240'), 10), 3000)
     const end = Date.now() + secs * 1000
+    setTimeout(() => { log('tempo limite da rodada: encerrando'); process.exit(0) }, (secs + 90) * 1000)   // trava de segurança: nunca prende o agendador
     await runPending(api)
     await runOnce(api)
     while (Date.now() + REFRESH_POLL * 1000 < end) {
       await new Promise((r) => setTimeout(r, REFRESH_POLL * 1000))
       try { await runPending(api) } catch (e) { log('erro nos pedidos imediatos:', e.message) }
     }
-    return
+    process.exit(0)   // encerra mesmo que alguma conexão ainda esteja aberta
   }
   let running = false
   const tick = async () => {
