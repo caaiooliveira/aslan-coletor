@@ -5,20 +5,29 @@ const UA =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
 
 /**
- * Gera a URL do perfil da Bigo.
- * Aceita letras, números, pontos e underline.
+ * Valida o ID Bigo e monta a URL do perfil.
+ *
+ * Aceita:
+ * - Números
+ * - Letras maiúsculas e minúsculas
+ * - Underscore (_)
+ * - Ponto (.)
+ *
+ * Limite: 1 a 50 caracteres.
  */
 export function urlFor(template, id) {
   const normalizedId = String(id ?? '').trim()
 
   if (!/^[A-Za-z0-9_.]{1,50}$/.test(normalizedId)) {
     throw new Error(
-      `id inválido: "${normalizedId}" (original: "${id}")`
+      `ID Bigo inválido: "${normalizedId}" (valor original: "${id}")`
     )
   }
 
   if (!template || !template.includes('{id}')) {
-    throw new Error('BIGO_URL_TEMPLATE inválido ou sem {id}')
+    throw new Error(
+      'BIGO_URL_TEMPLATE inválido ou sem o marcador {id}'
+    )
   }
 
   return template.replace(
@@ -28,49 +37,56 @@ export function urlFor(template, id) {
 }
 
 /**
- * Consulta rápida via HTTP.
+ * Consulta rápida: tenta obter os dados diretamente do HTML.
  */
 export async function fetchFast(url, timeoutMs = 8000) {
-  const ctl = new AbortController()
-  const timer = setTimeout(() => ctl.abort(), timeoutMs)
+  const controller = new AbortController()
+
+  const timer = setTimeout(
+    () => controller.abort(),
+    timeoutMs
+  )
 
   try {
-    const res = await fetch(url, {
+    const response = await fetch(url, {
       headers: {
         'user-agent': UA,
         'accept-language': 'pt-BR,pt;q=0.9',
       },
-      signal: ctl.signal,
+      signal: controller.signal,
       redirect: 'follow',
     })
 
-    if (!res.ok) {
+    if (!response.ok) {
       return {
         ok: false,
-        error: `HTTP ${res.status}`,
+        error: `HTTP ${response.status}`,
       }
     }
 
-    const p = parseBigo(await res.text())
+    const html = await response.text()
+    const parsed = parseBigo(html)
 
-    return p.beans != null
-      ? {
-          ok: true,
-          beans: p.beans,
-          viewNums: p.viewNums,
-          roomStatus: p.roomStatus,
-        }
-      : {
-          ok: false,
-          error: p.beansReason,
-        }
-  } catch (e) {
+    if (parsed.beans == null) {
+      return {
+        ok: false,
+        error: parsed.beansReason || 'Saldo não encontrado no HTML',
+      }
+    }
+
+    return {
+      ok: true,
+      beans: parsed.beans,
+      viewNums: parsed.viewNums,
+      roomStatus: parsed.roomStatus,
+    }
+  } catch (error) {
     return {
       ok: false,
       error:
-        e?.name === 'AbortError'
+        error?.name === 'AbortError'
           ? 'timeout'
-          : String(e?.message ?? e).slice(0, 120),
+          : String(error?.message ?? error).slice(0, 120),
     }
   } finally {
     clearTimeout(timer)
@@ -78,8 +94,8 @@ export async function fetchFast(url, timeoutMs = 8000) {
 }
 
 /**
- * Abre um navegador reutilizável.
- * Bloqueia imagens, fontes, mídia e CSS para economizar recursos.
+ * Abre o navegador Playwright para consultas que
+ * não funcionaram pelo método rápido.
  */
 export async function openBrowser() {
   const { chromium } = await import('playwright')
@@ -107,11 +123,12 @@ export async function openBrowser() {
     },
   })
 
+  // Bloqueia recursos que não são necessários para a leitura.
   await context.route('**/*', (route) => {
-    const type = route.request().resourceType()
+    const resourceType = route.request().resourceType()
 
     if (
-      ['image', 'font', 'media', 'stylesheet'].includes(type)
+      ['image', 'font', 'media', 'stylesheet'].includes(resourceType)
     ) {
       return route.abort()
     }
@@ -132,21 +149,26 @@ export async function openBrowser() {
 }
 
 /**
- * Consulta usando a página renderizada pelo navegador.
+ * Consulta com navegador: utilizada quando a consulta rápida
+ * não consegue obter os dados.
  */
-export async function fetchRendered(ctx, url, timeoutMs = 15000) {
-  const page = await ctx.context.newPage()
+export async function fetchRendered(
+  browserRef,
+  url,
+  timeoutMs = 15000
+) {
+  const page = await browserRef.context.newPage()
 
   try {
-    const resp = await page.goto(url, {
+    const response = await page.goto(url, {
       waitUntil: 'domcontentloaded',
       timeout: timeoutMs,
     })
 
-    if (resp && resp.status() >= 400) {
+    if (response && response.status() >= 400) {
       return {
         ok: false,
-        error: `HTTP ${resp.status()}`,
+        error: `HTTP ${response.status()}`,
         final: true,
       }
     }
@@ -155,37 +177,39 @@ export async function fetchRendered(ctx, url, timeoutMs = 15000) {
       timeout: timeoutMs,
     })
 
-    // Aguarda o valor deixar de ser um possível placeholder.
-    await page
-      .waitForFunction(
-        () =>
-          /\d/.test(
-            document.querySelector('.info-bean')?.textContent ?? ''
-          ),
-        null,
-        { timeout: 4000 }
-      )
-      .catch(() => {})
+    await page.waitForFunction(
+      () =>
+        /\d/.test(
+          document.querySelector('.info-bean')?.textContent ?? ''
+        ),
+      null,
+      {
+        timeout: 4000,
+      }
+    ).catch(() => {})
 
-    const p = parseBigo(await page.content())
+    const html = await page.content()
+    const parsed = parseBigo(html)
 
-    return p.beans != null
-      ? {
-          ok: true,
-          beans: p.beans,
-          viewNums: p.viewNums,
-          roomStatus: p.roomStatus,
-        }
-      : {
-          ok: false,
-          error: p.beansReason,
-        }
-  } catch (e) {
+    if (parsed.beans == null) {
+      return {
+        ok: false,
+        error: parsed.beansReason || 'Saldo não encontrado na página',
+      }
+    }
+
+    return {
+      ok: true,
+      beans: parsed.beans,
+      viewNums: parsed.viewNums,
+      roomStatus: parsed.roomStatus,
+    }
+  } catch (error) {
     return {
       ok: false,
-      error: /Timeout/i.test(String(e?.message))
+      error: /Timeout/i.test(String(error?.message))
         ? 'timeout (info-bean não apareceu)'
-        : String(e?.message ?? e)
+        : String(error?.message ?? error)
             .split('\n')[0]
             .slice(0, 120),
     }
