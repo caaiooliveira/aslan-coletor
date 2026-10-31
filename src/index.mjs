@@ -244,7 +244,6 @@ export async function runOnce(api) {
 
     log('Resultado Supabase:', JSON.stringify(result))
 
-    // Mostra erros individuais sem interromper a execução.
     for (const item of reads.filter((r) => !r.ok)) {
       log(
         `Falha na integrante ${item.member_id}: ${item.error}`
@@ -288,16 +287,16 @@ export async function runPending(api) {
 
     const result = await api.ingest(reads)
 
-    // Conclui as solicitações processadas.
-    // As falhas individuais ficam registradas no sync do Supabase.
-    await api.refreshDone(
-      targets.map((target) => target.member_id)
-    )
+    // Somente consultas bem-sucedidas são finalizadas.
+    const successfulIds = reads
+      .filter((item) => item.ok)
+      .map((item) => item.member_id)
 
-    const successful = reads.filter(
-      (item) => item.ok
-    ).length
+    if (successfulIds.length > 0) {
+      await api.refreshDone(successfulIds)
+    }
 
+    const successful = successfulIds.length
     const failed = reads.length - successful
 
     log(
@@ -411,7 +410,6 @@ async function probe(id) {
 async function main() {
   const mode = process.argv[2] ?? '--once'
 
-  // Teste individual não exige conexão com Supabase.
   if (mode === '--probe') {
     return probe(process.argv[3] ?? '')
   }
@@ -427,19 +425,16 @@ async function main() {
     KEY
   )
 
-  // Consulta geral: executa uma vez e encerra.
   if (mode === '--once') {
     await runOnce(api)
     return
   }
 
-  // Consulta sob demanda: processa solicitações pendentes.
   if (mode === '--pending') {
     await runPending(api)
     return
   }
 
-  // Modo contínuo: destinado a servidor permanente.
   if (mode === '--loop') {
     let running = false
     let watching = false
