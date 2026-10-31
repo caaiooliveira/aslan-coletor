@@ -3,7 +3,7 @@ name: Coletor Bigo
 
 on:
   schedule:
-    - cron: '0 */2 * * *'
+  - cron: '*/15 * * * *'
 
   workflow_dispatch:
     inputs:
