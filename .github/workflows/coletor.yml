@@ -1,0 +1,41 @@
+# Coletor ASLAN no GitHub Actions (grátis em repositório PÚBLICO).
+# A cada 5 minutos: lê o saldo de todas as integrantes e, durante ~4 minutos, atende o botão "Consultar agora".
+name: Coletor Bigo
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'     # o GitHub pode atrasar alguns minutos; é normal
+  workflow_dispatch:           # botão "Run workflow" para testar na hora
+
+# Nunca duas execuções ao mesmo tempo: a nova espera a anterior terminar.
+concurrency:
+  group: coletor-bigo
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  coletar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Cache do navegador
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps chromium
+      - name: Ler a Bigo e gravar no Supabase
+        run: node src/index.mjs --window 230
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BIGO_URL_TEMPLATE: https://www.bigo.tv/pt/{id}
+          REFRESH_POLL_SECONDS: '10'
