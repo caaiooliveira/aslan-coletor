@@ -4,6 +4,7 @@
 // --once: consulta todas as integrantes cadastradas uma vez.
 // --pending: atende solicitações de atualização pendentes.
 // --loop: modo contínuo para servidor próprio.
+// --window <segundos>: para o GitHub Actions. Lê todas uma vez e, até acabar o tempo, atende o botão "Consultar agora".
 // --probe <id>: testa a leitura de uma integrante.
 
 import { pathToFileURL } from 'node:url'
@@ -126,7 +127,12 @@ async function getBrowser(browserRef) {
   if (!browserRef.b) {
     browserRef.promise ??= openBrowser()
 
-    browserRef.b = await browserRef.promise
+    try {
+      browserRef.b = await browserRef.promise
+    } catch (error) {
+      browserRef.promise = null   // não guarda a falha: a próxima consulta pode tentar abrir de novo
+      throw error
+    }
   }
 
   return browserRef.b
@@ -287,13 +293,20 @@ export async function runPending(api) {
 
     const result = await api.ingest(reads)
 
-    // Somente consultas bem-sucedidas são finalizadas.
-    const successfulIds = reads
-      .filter((item) => item.ok)
-      .map((item) => item.member_id)
+    // Concluídas: só as que deram certo, e apenas se o pedido não foi renovado durante a leitura.
+    const stamp = new Map(targets.map((t) => [t.member_id, t.requested_at ?? null]))
+    const okReads = reads.filter((item) => item.ok)
+    const badReads = reads.filter((item) => !item.ok)
+    const tokens = (list) => (list.every((i) => stamp.get(i.member_id)) ? list.map((i) => stamp.get(i.member_id)) : null)
+    const successfulIds = okReads.map((item) => item.member_id)
 
-    if (successfulIds.length > 0) {
-      await api.refreshDone(successfulIds)
+    if (okReads.length > 0) {
+      await api.refreshDone(successfulIds, tokens(okReads))
+    }
+
+    // Falhas: o banco libera para nova tentativa (até 3) ou encerra o pedido mostrando o erro.
+    if (badReads.length > 0) {
+      await api.refreshFailed(badReads.map((item) => item.member_id), tokens(badReads))
     }
 
     const successful = successfulIds.length
@@ -318,6 +331,24 @@ export async function runPending(api) {
   }
 
   return targets.length
+}
+
+/** Atende pedidos por até `seconds`, reconsultando a cada 10 s (para as novas tentativas). Para depois de 3 consultas seguidas sem pedido. */
+export async function runPendingLoop(api, seconds = 150, pollMs = 10_000) {
+  const end = Date.now() + seconds * 1000
+  let empty = 0
+  let total = 0
+
+  while (Date.now() < end && empty < 3) {
+    let n = 0
+    try { n = await runPending(api) } catch (error) { log('Erro nas solicitações:', error.message) }
+    total += n
+    empty = n === 0 ? empty + 1 : 0
+    if (empty >= 3) break
+    await new Promise((resolve) => setTimeout(resolve, pollMs))
+  }
+
+  return total
 }
 
 // --------------------------------------------------
@@ -427,12 +458,26 @@ async function main() {
 
   if (mode === '--once') {
     await runOnce(api)
-    return
+    process.exit(0)   // encerra mesmo que alguma conexão ainda esteja aberta
+  }
+
+  if (mode === '--window') {
+    const secs = Math.min(Math.max(Number(process.argv[3] ?? '285'), 10), 3000)
+    const end = Date.now() + secs * 1000
+    const poll = Math.max(Number(process.env.REFRESH_POLL_SECONDS ?? '10'), 2) * 1000
+    setTimeout(() => { log('Tempo limite da rodada: encerrando.'); process.exit(0) }, (secs + 90) * 1000)   // trava de segurança
+    try { await runPending(api) } catch (e) { log('Erro nas solicitações:', e.message) }
+    try { await runOnce(api) } catch (e) { log('Erro na consulta geral:', e.message) }
+    while (Date.now() + poll < end) {
+      await new Promise((r) => setTimeout(r, poll))
+      try { await runPending(api) } catch (e) { log('Erro nas solicitações:', e.message) }
+    }
+    process.exit(0)
   }
 
   if (mode === '--pending') {
-    await runPending(api)
-    return
+    await runPendingLoop(api, Number(process.argv[3] ?? '150'), Number(process.env.REFRESH_POLL_SECONDS ?? '10') * 1000)
+    process.exit(0)
   }
 
   if (mode === '--loop') {

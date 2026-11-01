@@ -18,7 +18,7 @@ const UA =
 export function urlFor(template, id) {
   const normalizedId = String(id ?? '').trim()
 
-  if (!/^[A-Za-z0-9_.]{1,50}$/.test(normalizedId)) {
+  if (!/^[A-Za-z0-9_.-]{1,50}$/.test(normalizedId)) {
     throw new Error(
       `ID Bigo inválido: "${normalizedId}" (valor original: "${id}")`
     )

@@ -44,10 +44,18 @@ export function makeApi(baseUrl, serviceKey) {
     pending: () =>
       call('bigo_pending_refresh'),
 
-    // Confirma o processamento das solicitações.
-    refreshDone: (ids) =>
+    // Conclui os pedidos lidos com sucesso. "requestedAts" (opcional) protege contra um pedido novo feito durante a leitura.
+    refreshDone: (ids, requestedAts = null) =>
       call('bigo_refresh_done', {
         p_member_ids: ids,
+        ...(requestedAts ? { p_requested_ats: requestedAts } : {}),
+      }),
+
+    // Leitura falhou: libera para nova tentativa (até 3) ou encerra o pedido.
+    refreshFailed: (ids, requestedAts = null) =>
+      call('bigo_refresh_failed', {
+        p_member_ids: ids,
+        ...(requestedAts ? { p_requested_ats: requestedAts } : {}),
       }),
   }
 }
