@@ -182,6 +182,10 @@ async function readOne(target, browserRef) {
     }
 
     if (result.ok) {
+      // Linha de diagnóstico (aparece no log do GitHub): mostra o que foi lido e a decisão de "ao vivo".
+      log(
+        `[leitura] ${target.bigo_id ?? ''} beans=${result.beans} views=${result.viewNums} sala=${result.roomStatus} -> ao vivo: ${liveSignal(result) > 0 ? 'SIM' : 'NÃO'}`
+      )
       return {
         member_id: target.member_id,
         ok: true,

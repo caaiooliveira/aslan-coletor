@@ -17,3 +17,12 @@ O GitHub roda o coletor sozinho a cada 5 minutos e atende o botão "Consultar ag
 - Se ninguém mexer no repositório por 60 dias, o GitHub pausa os agendamentos: basta abrir a aba Actions e reativar (ou fazer qualquer pequena alteração).
 - Se aparecer erro de leitura em todos os IDs, a Bigo pode estar bloqueando os servidores do GitHub. Nesse caso use o coletor no seu computador (`npm start`), que já foi testado: leu 7898 beans do ID 129896171.
 - Se você ligou a leitura pelo Supabase (script 12), desligue-a para não duplicar.
+
+## Se não repetir sozinho
+- Confira em `.github/workflows/coletor.yml` que o agendamento é `cron: '*/5 * * * *'` (a cada 5 minutos). Algo como `0 */2 * * *` roda só de 2 em 2 horas.
+- Em repositório novo, a primeira rodada agendada pode demorar até cerca de 1 hora para começar; depois fica regular. Use **Run workflow** para não esperar.
+- Aba **Actions → Coletor Bigo**: se aparecer "This scheduled workflow is disabled", clique em **Enable workflow**.
+- O agendamento só vale no branch principal (`main`).
+
+## Recomendado: o Supabase acorda o coletor
+O agendamento do GitHub é pouco confiável. Siga `docs/14_github_dispara.md` (scripts 16 e 17 do banco + token do GitHub): o Supabase dispara a leitura geral a cada 20 minutos e a consulta de cada clique no botão. O workflow já tem as opções `pending`, `once` e `window` no **Run workflow**.
