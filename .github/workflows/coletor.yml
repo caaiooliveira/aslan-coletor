@@ -72,3 +72,4 @@ jobs:
           CONCURRENCY: '4'
           FAST_PATH: '1'
           LIVE_SIGNAL: 'room'
+# Atualização para revalidar o agendamento automático
