@@ -43,5 +43,7 @@ test('ao vivo: status da sala > 0 ou audiência > 0', () => {
   const on = parseBigo('<div data-room-status="1"><div class="info-bean">1</div><div class="info-view-nums">0</div></div>')
   assert.equal(on.roomStatus, 1); assert.equal(liveSignal({ viewNums: 0, roomStatus: 1 }), 1)
   assert.equal(parseBigo('<div class="info-bean">1</div>').roomStatus, null)
+  assert.equal(liveSignal({ viewNums: 0, roomStatus: 0, playerLive: true }), 1)
+  assert.equal(liveSignal({ viewNums: 0, roomStatus: 0, playerLive: false }), 0)
   assert.equal(liveSignal({ viewNums: 5, roomStatus: null }), 5)   // sem o atributo: volta para as visualizações
 })
