@@ -61,3 +61,4 @@ jobs:
           FAST_PATH: '1'
           LIVE_SIGNAL: 'room'
           REFRESH_POLL_SECONDS: '10'
+#atualize
