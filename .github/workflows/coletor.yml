@@ -29,7 +29,7 @@ concurrency:
 jobs:
   coletar:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -45,7 +45,7 @@ jobs:
             npx playwright install --with-deps chromium
           fi
       - name: Consultar a Bigo e atualizar o Supabase
-        timeout-minutes: 7
+        timeout-minutes: 18
         run: |
           MODE="${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'once' }}"
           case "$MODE" in
@@ -61,4 +61,3 @@ jobs:
           FAST_PATH: '1'
           LIVE_SIGNAL: 'room'
           REFRESH_POLL_SECONDS: '10'
-#atualize
