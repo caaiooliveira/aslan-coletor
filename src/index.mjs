@@ -107,16 +107,15 @@ export async function pool(items, limit, fn) {
 // --------------------------------------------------
 
 export function liveSignal(result) {
-  if (
-    LIVE_SIGNAL === 'views' ||
-    result.roomStatus == null
-  ) {
-    return result.viewNums
-  }
+  const views = result.viewNums ?? 0
+  const room = result.roomStatus ?? 0
 
-  return result.roomStatus === 0
-    ? 0
-    : Math.max(result.viewNums ?? 0, 1)
+  // Só audiência (modo antigo).
+  if (LIVE_SIGNAL === 'views') return views
+
+  // Ao vivo se o status da sala for maior que 0 OU se info-view-nums for maior que 0.
+  if (views > 0) return views
+  return room > 0 ? 1 : 0
 }
 
 // --------------------------------------------------

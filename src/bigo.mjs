@@ -188,14 +188,26 @@ export async function fetchRendered(
       }
     ).catch(() => {})
 
-    const html = await page.content()
-    const parsed = parseBigo(html)
+    let parsed = parseBigo(await page.content())
 
     if (parsed.beans == null) {
       return {
         ok: false,
         error: parsed.beansReason || 'Saldo não encontrado na página',
       }
+    }
+
+    // O saldo aparece antes do status da sala e da audiência (a Bigo preenche depois).
+    // Espera até LIVE_SETTLE_MS por um sinal de "ao vivo"; quem está offline espera o tempo todo e segue.
+    const settleMs = Number(process.env.LIVE_SETTLE_MS ?? 8000)
+    const until = Date.now() + (Number.isFinite(settleMs) ? settleMs : 8000)
+    const looksLive = (r) => (r.roomStatus ?? 0) > 0 || (r.viewNums ?? 0) > 0
+
+    while (!looksLive(parsed) && Date.now() < until) {
+      await page.waitForTimeout(500)
+      const next = parseBigo(await page.content())
+
+      if (next.beans != null) parsed = next
     }
 
     return {

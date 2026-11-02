@@ -36,9 +36,10 @@ test('parseBigo: sem info-bean => erro claro, sem número', () => {
 })
 
 import { liveSignal } from '../src/index.mjs'
-test('status da sala: ignora robôs nas visualizações', () => {
+test('ao vivo: status da sala > 0 ou audiência > 0', () => {
   const off = parseBigo('<div class="host-info" data-room-status="0"><div class="info-bean">7898</div><div class="info-view-nums">350</div></div>')
-  assert.equal(off.roomStatus, 0); assert.equal(liveSignal({ viewNums: 350, roomStatus: 0 }), 0)
+  assert.equal(off.roomStatus, 0); assert.equal(liveSignal({ viewNums: 350, roomStatus: 0 }), 350)   // audiência > 0 também conta como ao vivo
+  assert.equal(liveSignal({ viewNums: 0, roomStatus: 0 }), 0)
   const on = parseBigo('<div data-room-status="1"><div class="info-bean">1</div><div class="info-view-nums">0</div></div>')
   assert.equal(on.roomStatus, 1); assert.equal(liveSignal({ viewNums: 0, roomStatus: 1 }), 1)
   assert.equal(parseBigo('<div class="info-bean">1</div>').roomStatus, null)
