@@ -199,8 +199,8 @@ export async function fetchRendered(
 
     // O saldo aparece antes do status da sala e da audiência (a Bigo preenche depois).
     // Espera até LIVE_SETTLE_MS por um sinal de "ao vivo"; quem está offline espera o tempo todo e segue.
-    const settleMs = Number(process.env.LIVE_SETTLE_MS ?? 8000)
-    const until = Date.now() + (Number.isFinite(settleMs) ? settleMs : 8000)
+    const settleMs = Number(process.env.LIVE_SETTLE_MS ?? 10000)
+    const until = Date.now() + (Number.isFinite(settleMs) ? settleMs : 10000)
     const looksLive = (r) => (r.roomStatus ?? 0) > 0 || (r.viewNums ?? 0) > 0
 
     while (!looksLive(parsed) && Date.now() < until) {
