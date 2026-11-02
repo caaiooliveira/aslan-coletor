@@ -60,4 +60,5 @@ jobs:
           CONCURRENCY: '4'
           FAST_PATH: '1'
           LIVE_SIGNAL: 'room'
+          LIVE_DEBUG: '1'
           REFRESH_POLL_SECONDS: '10'
