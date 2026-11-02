@@ -74,6 +74,16 @@ export async function fetchFast(url, timeoutMs = 8000) {
       }
     }
 
+    if (process.env.LIVE_DEBUG === '1' && !looksLive(parsed)) {
+      // Diagnóstico: mostra o trecho da página onde ficam saldo, status e espectadores.
+      const html = await page.content()
+      const i = html.indexOf('host-info')
+      console.log(
+        `[debug] ${url} sem sinal de ao vivo; trecho:`,
+        html.slice(Math.max(0, i - 40), i + 700).replace(/\s+/g, ' ')
+      )
+    }
+
     return {
       ok: true,
       beans: parsed.beans,
@@ -123,13 +133,22 @@ export async function openBrowser() {
     },
   })
 
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined })
+  })
+
   // Bloqueia recursos que não são necessários para a leitura.
   await context.route('**/*', (route) => {
     const resourceType = route.request().resourceType()
 
-    if (
-      ['image', 'font', 'media', 'stylesheet'].includes(resourceType)
-    ) {
+    // Por padrão só imagens e fontes são bloqueadas. Vídeo e estilos carregam normalmente,
+    // porque a Bigo pode só contar espectadores depois de a sala "tocar".
+    // BLOCK_HEAVY=1 volta a bloquear tudo (mais leve, porém pode não achar os espectadores).
+    const blocked = process.env.BLOCK_HEAVY === '1'
+      ? ['image', 'font', 'media', 'stylesheet']
+      : ['image', 'font']
+
+    if (blocked.includes(resourceType)) {
       return route.abort()
     }
 
